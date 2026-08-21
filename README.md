@@ -103,12 +103,12 @@ quants/paths are specific to what you've downloaded, not portable). See
 - **Add a model**: drop a file in `models/`. llama-swap picks it up live
   via `-config-dir` + `-watch-config` — no restart.
 - **Remove a model**: delete its file. Same, no restart.
-- **LiteLLM side**: `docker compose up config-generator && docker compose
-  restart litellm` after any change — LiteLLM has no hot-reload, unlike
-  llama-swap. This also runs automatically on every `docker compose up`.
-  (`scripts/generate_litellm_models.py` needs `pyyaml`; running it directly
-  on the host works too if you have that installed — the containerized
-  route above doesn't need anything extra.)
+- **LiteLLM side**: `docker compose restart litellm` after any change —
+  LiteLLM has no hot-reload, unlike llama-swap. `LiteLLM/litellm_startup_hook.py`
+  runs as a [worker startup
+  hook](https://docs.litellm.ai/docs/proxy/worker_startup_hooks) inside the
+  litellm container itself, so every start/restart regenerates the model
+  list from `models/*.yaml` automatically — no separate step needed.
 
 ## Known gaps
 

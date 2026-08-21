@@ -60,17 +60,6 @@ services:
       - LLAMA_SWAP_API_KEY=${LLAMA_SWAP_API_KEY}
     networks: [ui, inference]
 
-  # --- config-generator (one-shot: models/*.yaml -> LiteLLM/llama-swap-models.yaml) ---
-  config-generator:
-    image: python:3.12-slim
-    container_name: config-generator
-    volumes:
-      - ${REPO_CONFIG_PATH}/models:/app/models:ro
-      - ${REPO_CONFIG_PATH}/LiteLLM:/app/LiteLLM
-      - ${REPO_CONFIG_PATH}/scripts/generate_litellm_models.py:/app/generate_litellm_models.py:ro
-    working_dir: /app
-    command: ["sh", "-c", "pip install --quiet --no-cache-dir pyyaml && python3 generate_litellm_models.py --models-dir /app/models --out /app/LiteLLM/llama-swap-models.yaml"]
-
   # --- LiteLLM (unified API gateway + admin UI) ---
   litellm:
     image: ghcr.io/berriai/litellm-non_root:${LITELLM_IMAGE_TAG}
@@ -79,8 +68,6 @@ services:
     depends_on:
       litellm-db:
         condition: service_started
-      config-generator:
-        condition: service_completed_successfully
     environment:
       - DATABASE_URL=${DATABASE_URL}
       - UI_USERNAME=${LITELLM_UI_USERNAME}
@@ -91,14 +78,19 @@ services:
       - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY:-}
       - LLAMA_SWAP_API_KEY=${LLAMA_SWAP_API_KEY}
       - LLAMA_SWAP_API_BASE=${LLAMA_SWAP_API_BASE}
+      # See LiteLLM/README.md for what this hook does and why.
+      - LITELLM_WORKER_STARTUP_HOOKS=litellm_startup_hook:generate_models
+      - PYTHONPATH=/app/hooks
     volumes:
-      - ${REPO_CONFIG_PATH}/LiteLLM/config.yaml:/app/config.yaml
-      - ${REPO_CONFIG_PATH}/LiteLLM/llama-swap-models.yaml:/app/llama-swap-models.yaml
+      - ${REPO_CONFIG_PATH}/LiteLLM/config.yaml:/app/config.static.yaml:ro
+      - ${REPO_CONFIG_PATH}/models:/app/models:ro
+      - ${REPO_CONFIG_PATH}/LiteLLM/litellm_startup_hook.py:/app/hooks/litellm_startup_hook.py:ro
+    entrypoint: ["sh", "-c"]
     command:
-      - "--config"
-      - "/app/config.yaml"
-      - "--port"
-      - "4000"
+      - |
+        set -e
+        cp /app/config.static.yaml /app/config.yaml
+        exec litellm --config /app/config.yaml --port 4000
     networks: [edge, inference, data]
 
   # --- LiteLLM database (PostgreSQL) ---

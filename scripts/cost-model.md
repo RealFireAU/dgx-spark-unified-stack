@@ -6,7 +6,7 @@ each model, so LiteLLM's cost tracking reflects that instead of showing 0.
 
 Cost fields live in each model's own `metadata:` block under
 `models/<name>.yaml`, not hand-written into `LiteLLM/config.yaml` —
-`scripts/generate_litellm_models.py` copies them into LiteLLM's
+`LiteLLM/litellm_startup_hook.py` copies them into LiteLLM's
 `model_info` automatically. (LiteLLM's `model_list` is static config — it
 does not live-query an upstream OpenAI-compatible provider for pricing, so
 there's no way to make this "just work" without setting it explicitly

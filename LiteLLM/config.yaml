@@ -1,8 +1,6 @@
-# LiteLLM config.yaml — static, hand-maintained. Model registrations come
-# from models/*.yaml via the generated include below; add non-llama-swap
-# providers directly here.
-include:
-  - llama-swap-models.yaml
+# LiteLLM config.yaml — static, hand-maintained; add non-llama-swap
+# providers directly here. Model registrations come from models/*.yaml —
+# see README.md in this directory.
 
 litellm_settings:
   modify_params: true
