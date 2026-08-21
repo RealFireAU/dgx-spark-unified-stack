@@ -1,5 +1,14 @@
 # Model Tiering Benchmark
 
+## Setup
+```bash
+python3 -m venv scripts/.venv
+scripts/.venv/bin/pip install -r scripts/requirements.txt
+```
+Also needs `LITELLM_MASTER_KEY`, `LITELLM_BASE_URL`, `LLAMA_SWAP_API_KEY`,
+`LLAMA_SWAP_BASE_URL` in your shell environment (e.g. `set -a && source
+.env && set +a` from the repo root) — see `.env.example`.
+
 ## Overview
 This benchmark measures time-to-first-token, decode/prompt throughput, and
 GPU memory footprint for every text model registered in llama-swap, driven

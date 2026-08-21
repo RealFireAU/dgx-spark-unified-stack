@@ -9,6 +9,8 @@ GGUF metadata comes straight from the file's own KV header via GGUFReader
 (no tensor data loaded, fast even for 80GB+ files). Safetensors metadata
 comes from each model directory's config.json/tokenizer_config.json.
 
+Needs the `gguf` package: pip install -r scripts/requirements.txt
+
 Usage:
     python3 scripts/build_model_catalog.py [--gguf-root PATH] [--safetensors-root PATH]
 

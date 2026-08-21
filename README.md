@@ -73,9 +73,21 @@ prevented at the network layer.
 ## Bring it up
 
 ```bash
-cp .env.example .env      # fill in real values
+cp .env.example .env      # fill in real values, including LLM_ROOT_PATH
 cp proxy/Caddyfile.sample proxy/Caddyfile   # fill in your own hostnames
-docker compose build vllm comfyui sd-cpp    # the three local-build engines
+
+# Create these yourself first, as your own user -- Docker auto-creates a
+# missing bind-mount directory as root:root on first `up`, which then
+# blocks you from writing your own files into it afterward.
+set -a && source .env && set +a
+mkdir -p models "$LLM_ROOT_PATH"/{gguf,safetensors,diffusion}
+
+# vllm first, on its own -- comfyui's Dockerfile is FROM vllm-spark:local,
+# and `docker compose build` can parallelize a multi-service build, which
+# would break if comfyui starts before that image exists.
+docker compose build vllm
+docker compose build comfyui sd-cpp
+
 docker compose up -d
 ```
 
@@ -91,10 +103,12 @@ quants/paths are specific to what you've downloaded, not portable). See
 - **Add a model**: drop a file in `models/`. llama-swap picks it up live
   via `-config-dir` + `-watch-config` — no restart.
 - **Remove a model**: delete its file. Same, no restart.
-- **LiteLLM side**: run `python3 scripts/generate_litellm_models.py` after
-  any change, then `docker compose restart litellm` — LiteLLM has no
-  hot-reload, unlike llama-swap. The `config-generator` service also runs
-  this automatically on `docker compose up`.
+- **LiteLLM side**: `docker compose up config-generator && docker compose
+  restart litellm` after any change — LiteLLM has no hot-reload, unlike
+  llama-swap. This also runs automatically on every `docker compose up`.
+  (`scripts/generate_litellm_models.py` needs `pyyaml`; running it directly
+  on the host works too if you have that installed — the containerized
+  route above doesn't need anything extra.)
 
 ## Known gaps
 

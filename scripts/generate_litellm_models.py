@@ -3,6 +3,10 @@
 models/*.yaml (real llama-swap partial-config). Included via `include:` in
 LiteLLM/config.yaml, which stays static/hand-maintained.
 
+Needs pyyaml: pip install -r scripts/requirements.txt (already present in
+the config-generator compose service's own container -- only needed on the
+host if you run this script directly instead).
+
 Usage: python3 scripts/generate_litellm_models.py [--models-dir DIR] [--out FILE]
 """
 import argparse
