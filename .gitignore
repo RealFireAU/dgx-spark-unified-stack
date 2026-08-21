@@ -24,7 +24,6 @@ ds4/
 *.o
 *.sqlite
 *.pid
-LiteLLM/llama-swap-models.yaml
 scripts/results/
 
 # --- Personal working notes (real hardware/model choices, not template material) ---

@@ -21,12 +21,14 @@ and polls for changes every 2s — add a file to register a model, delete one
 to unregister it, no restart needed. Each file is real llama-swap
 partial-config: exactly one `models:` key, containing exactly one model.
 
-After adding/removing a model, regenerate LiteLLM's model list:
+After adding/removing a model:
 
 ```bash
-python3 scripts/generate_litellm_models.py
 docker compose restart litellm   # LiteLLM has no hot-reload, unlike llama-swap
 ```
+
+LiteLLM's model list regenerates automatically on every start/restart — see
+`LiteLLM/litellm_startup_hook.py`.
 
 ## Fields
 

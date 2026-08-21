@@ -1,23 +1,19 @@
-#!/usr/bin/env python3
-"""Generate LiteLLM/llama-swap-models.yaml (model_list only) from every
-models/*.yaml (real llama-swap partial-config). Included via `include:` in
-LiteLLM/config.yaml, which stays static/hand-maintained.
+"""LiteLLM worker startup hook (LITELLM_WORKER_STARTUP_HOOKS=litellm_startup_hook:generate_models).
 
-Needs pyyaml: pip install -r scripts/requirements.txt (already present in
-the config-generator compose service's own container -- only needed on the
-host if you run this script directly instead).
-
-Usage: python3 scripts/generate_litellm_models.py [--models-dir DIR] [--out FILE]
+Generates the model list from models/*.yaml and wires it into config.yaml
+via `include:`. See README.md in this directory for why.
 """
-import argparse
 import glob
 import os
 
 import yaml
 
+CONFIG_PATH = "/app/config.yaml"
+MODELS_FILENAME = "llama-swap-models.yaml"
+
 ANCHOR_HEADER = (
-    "# GENERATED FILE — edit models/<name>.yaml then re-run\n"
-    "# scripts/generate_litellm_models.py. Do not hand-edit.\n"
+    "# GENERATED FILE — edit models/<name>.yaml then restart litellm.\n"
+    "# Do not hand-edit as it will be discarded.\n"
 )
 
 
@@ -60,21 +56,15 @@ def indent(text, spaces):
     return "\n".join(prefix + line for line in text.splitlines())
 
 
-def main():
-    ap = argparse.ArgumentParser()
-    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    ap.add_argument("--models-dir", default=os.path.join(root, "models"))
-    ap.add_argument("--out", default=os.path.join(root, "LiteLLM", "llama-swap-models.yaml"))
-    args = ap.parse_args()
-
+def generate(models_dir, out_path):
     entries = []
-    for path in sorted(glob.glob(os.path.join(args.models_dir, "*.yaml"))):
+    for path in sorted(glob.glob(os.path.join(models_dir, "*.yaml"))):
         with open(path) as f:
             doc = yaml.safe_load(f)
         for model_id, block in (doc.get("models") or {}).items():
             entries.append((model_id, model_info_for(block)))
 
-    with open(args.out, "w") as f:
+    with open(out_path, "w") as f:
         f.write(ANCHOR_HEADER)
         f.write("\n")
         f.write("x-llama-swap-defaults: &llama_swap_defaults\n")
@@ -94,8 +84,21 @@ def main():
                 f.write("\n")
             f.write("\n")
 
-    print(f"Wrote {len(entries)} models to {args.out}")
+    return len(entries)
 
 
-if __name__ == "__main__":
-    main()
+def generate_models():
+    models_dir = os.environ.get("LITELLM_MODELS_DIR", "/app/models")
+    out_path = os.environ.get("LITELLM_MODELS_OUT", f"/app/{MODELS_FILENAME}")
+    count = generate(models_dir, out_path)
+    print(f"[litellm_startup_hook] Wrote {count} models to {out_path}")
+
+    with open(CONFIG_PATH) as f:
+        config = yaml.safe_load(f) or {}
+    # Parse (not substring-match) so this can't false-positive on the
+    # word "llama-swap-models.yaml" appearing in config.yaml's own
+    # header comment -- comments are stripped by the YAML parser.
+    if MODELS_FILENAME not in (config.get("include") or []):
+        with open(CONFIG_PATH, "a") as f:
+            f.write(f"\ninclude:\n  - {MODELS_FILENAME}\n")
+        print(f"[litellm_startup_hook] Injected include: {MODELS_FILENAME} into {CONFIG_PATH}")
