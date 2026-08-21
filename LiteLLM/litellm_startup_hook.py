@@ -3,6 +3,7 @@
 Generates the model list from models/*.yaml and wires it into config.yaml
 via `include:`. See README.md in this directory for why.
 """
+import fcntl
 import glob
 import os
 
@@ -10,6 +11,7 @@ import yaml
 
 CONFIG_PATH = "/app/config.yaml"
 MODELS_FILENAME = "llama-swap-models.yaml"
+LOCK_PATH = "/app/.litellm_startup_hook.lock"
 
 ANCHOR_HEADER = (
     "# GENERATED FILE — edit models/<name>.yaml then restart litellm.\n"
@@ -64,7 +66,8 @@ def generate(models_dir, out_path):
         for model_id, block in (doc.get("models") or {}).items():
             entries.append((model_id, model_info_for(block)))
 
-    with open(out_path, "w") as f:
+    tmp_path = f"{out_path}.tmp"
+    with open(tmp_path, "w") as f:
         f.write(ANCHOR_HEADER)
         f.write("\n")
         f.write("x-llama-swap-defaults: &llama_swap_defaults\n")
@@ -83,11 +86,26 @@ def generate(models_dir, out_path):
                 f.write(indent(dumped, 6))
                 f.write("\n")
             f.write("\n")
+    # Atomic on POSIX: readers never observe a partial/truncated file,
+    # and concurrent workers racing this rename just clobber, not interleave.
+    os.replace(tmp_path, out_path)
 
     return len(entries)
 
 
 def generate_models():
+    # Serialize across worker processes: each worker runs this hook once at
+    # startup, and without a lock, concurrent runs can interleave writes to
+    # the shared models file / config.yaml (see LiteLLM/README.md).
+    with open(LOCK_PATH, "w") as lock_f:
+        fcntl.flock(lock_f, fcntl.LOCK_EX)
+        try:
+            _generate_models_locked()
+        finally:
+            fcntl.flock(lock_f, fcntl.LOCK_UN)
+
+
+def _generate_models_locked():
     models_dir = os.environ.get("LITELLM_MODELS_DIR", "/app/models")
     out_path = os.environ.get("LITELLM_MODELS_OUT", f"/app/{MODELS_FILENAME}")
     count = generate(models_dir, out_path)
