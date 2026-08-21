@@ -2,8 +2,15 @@
 
 `models/` itself is gitignored (real quants/paths are specific to what your
 box has downloaded, not portable to a different machine). This directory
-shows the schema with two worked examples — copy one into your own
-`models/<name>.yaml` and adjust.
+shows the schema with worked examples — copy one into your own
+`models/<name>.yaml` and adjust:
+
+- `example-llamacpp-model.yaml` — a GGUF text model via llama.cpp
+- `example-vllm-model.yaml` — a safetensors text model via vLLM, with cost
+  `metadata`
+- `example-comfyui-model.yaml` — the special `comfyui_auto` entry (no
+  `capabilities:` block, `unlisted: true`) that gives llama-swap's native
+  ComfyUI integration a container to spawn
 
 llama-swap runs with `-config llama-swap/config.yaml -config-dir models/
 -watch-config`, which merges every `*.yaml` under `models/` into the config
@@ -36,4 +43,10 @@ docker compose restart litellm   # LiteLLM has no hot-reload, unlike llama-swap
 - `cmd`/`cmdStop` — use the shared `${llamacpp_base}`/`${vllm_base}` macros
   (defined in `llama-swap/config.yaml`) to avoid repeating the docker-run
   boilerplate. `${MODEL_ID}` is a real llama-swap macro (this file's model
-  key), `${PORT}`/`${host}` are assigned per-boot.
+  key), `${PORT}`/`${host}` are assigned per-boot. `${env.VAR}` pulls from
+  the container's environment (e.g. `${env.LLM_ROOT_PATH}`,
+  `${env.REPO_CONFIG_PATH}` — both already set on the `llama-swap` service
+  in `docker-compose.yml`) so a model file never needs a hardcoded host path.
+- `unlisted: true` — keeps a model out of `/v1/models` without removing it
+  (see `example-comfyui-model.yaml`) — for entries that aren't a normal
+  single-capability chat/completion model.

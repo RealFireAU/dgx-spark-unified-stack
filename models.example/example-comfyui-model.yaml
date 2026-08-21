@@ -1,0 +1,23 @@
+models:
+  comfyui_auto:
+    name: ComfyUI
+    description: Node-graph workflow UI for image/video generation.
+    # unlisted: true keeps this out of /v1/models -- it's a whole workflow
+    # app (text/image/video/audio depending on the loaded workflow), not a
+    # single fixed-capability model, so there's no sensible `capabilities:`
+    # block and no LiteLLM route for it either (see README's Networking
+    # section for the dedicated /comfyui/* proxy route instead).
+    unlisted: true
+    ttl: 300
+    checkEndpoint: "/"
+    cmd: |
+      docker run --rm --name comfyui-${PORT}
+      --gpus all --ipc host --network container:llama-swap
+      -v ${env.LLM_ROOT_PATH}/diffusion:/app/ComfyUI/models
+      -v ${env.REPO_CONFIG_PATH}/comfyui/data/output:/app/ComfyUI/output
+      -v ${env.REPO_CONFIG_PATH}/comfyui/data/input:/app/ComfyUI/input
+      -v ${env.REPO_CONFIG_PATH}/comfyui/data/user:/app/ComfyUI/user
+      -v ${env.REPO_CONFIG_PATH}/comfyui/data/custom_nodes:/app/ComfyUI/custom_nodes
+      comfyui:local
+      --listen ${host} --port ${PORT}
+    cmdStop: "docker stop comfyui-${PORT}"
