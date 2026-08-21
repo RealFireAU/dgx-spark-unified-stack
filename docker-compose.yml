@@ -88,6 +88,7 @@ services:
     entrypoint: ["sh", "-c"]
     command:
       - |
+        set -e
         cp /app/config.static.yaml /app/config.yaml
         exec litellm --config /app/config.yaml --port 4000
     networks: [edge, inference, data]
