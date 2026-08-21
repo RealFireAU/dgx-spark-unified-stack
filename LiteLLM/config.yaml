@@ -1,0 +1,25 @@
+# LiteLLM config.yaml — static, hand-maintained. Model registrations come
+# from models/*.yaml via the generated include below; add non-llama-swap
+# providers directly here.
+include:
+  - llama-swap-models.yaml
+
+litellm_settings:
+  modify_params: true
+
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY
+  ui_username: os.environ/UI_USERNAME
+  ui_password: os.environ/UI_PASSWORD
+  ui_access_mode: "admin_only"
+  disable_master_key_return: true
+  allow_model_creation: false
+
+  # Automatic1111 /sdapi/* passthrough to llama-swap (stable-diffusion.cpp)
+  pass_through_endpoints:
+    - path: "/sdapi"
+      target: "http://llama-swap:8080/sdapi"
+      include_subpath: true
+      auth: true
+      headers:
+        x-api-key: os.environ/LLAMA_SWAP_API_KEY

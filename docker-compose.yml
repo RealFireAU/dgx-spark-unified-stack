@@ -1,0 +1,155 @@
+# DGX Spark Unified Inference Stack
+# One entry point (LiteLLM) -> llama-swap (load/evict/GPU-sharing) -> engines.
+# See README.md for architecture, networking, and storage layout.
+# Required env vars: see .env.example
+
+services:
+  # --- proxy (Caddy — the only service publishing host ports) ---
+  proxy:
+    image: caddy-cloudflare:local
+    build:
+      context: ./proxy
+      dockerfile: caddy.Dockerfile
+    container_name: proxy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      - CF_API_TOKEN=${CF_API_TOKEN} # Only if using Cloudflare DNS-01
+      - LLAMA_SWAP_API_KEY=${LLAMA_SWAP_API_KEY} # Silently auth user for UI.
+    volumes:
+      - ${REPO_CONFIG_PATH}/proxy/Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    networks: [edge, ui]
+
+  # --- llama-swap (VRAM manager) ---
+  llama-swap:
+    image: ghcr.io/mostlygeek/llama-swap:${LLAMA_SWAP_IMAGE_TAG}
+    container_name: llama-swap
+    restart: unless-stopped
+    group_add:
+      - "${DOCKER_GID}"
+    command: ["-config-dir", "/app/models", "-listen", "0.0.0.0:8080"]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
+    volumes:
+      - ${REPO_CONFIG_PATH}/llama-swap/config.yaml:/app/config.yaml
+      - ${REPO_CONFIG_PATH}/models:/app/models
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /usr/bin/docker:/usr/bin/docker:ro
+      - ${LLM_ROOT_PATH}:/models
+    deploy:
+      resources:
+        reservations:
+          devices: [{driver: nvidia, count: all, capabilities: [gpu]}]
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+      - LLM_ROOT_PATH=${LLM_ROOT_PATH}
+      - LLAMA_SWAP_API_KEY=${LLAMA_SWAP_API_KEY}
+    networks: [ui, inference]
+
+  # --- config-generator (one-shot: models/*.yaml -> LiteLLM/llama-swap-models.yaml) ---
+  config-generator:
+    image: python:3.12-slim
+    container_name: config-generator
+    volumes:
+      - ${REPO_CONFIG_PATH}/models:/app/models:ro
+      - ${REPO_CONFIG_PATH}/LiteLLM:/app/LiteLLM
+      - ${REPO_CONFIG_PATH}/scripts/generate_litellm_models.py:/app/generate_litellm_models.py:ro
+    working_dir: /app
+    command: ["sh", "-c", "pip install --quiet --no-cache-dir pyyaml && python3 generate_litellm_models.py --models-dir /app/models --out /app/LiteLLM/llama-swap-models.yaml"]
+
+  # --- LiteLLM (unified API gateway + admin UI) ---
+  litellm:
+    image: ghcr.io/berriai/litellm-non_root:${LITELLM_IMAGE_TAG}
+    container_name: litellm
+    restart: unless-stopped
+    depends_on:
+      litellm-db:
+        condition: service_started
+      config-generator:
+        condition: service_completed_successfully
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - UI_USERNAME=${LITELLM_UI_USERNAME}
+      - UI_PASSWORD=${LITELLM_UI_PASSWORD}
+      - ROOT_REDIRECT_URL=/ui/
+      - NO_DOCS=true
+      - NO_REDOC=true
+      - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY:-}
+      - LLAMA_SWAP_API_KEY=${LLAMA_SWAP_API_KEY}
+      - LLAMA_SWAP_API_BASE=${LLAMA_SWAP_API_BASE}
+    volumes:
+      - ${REPO_CONFIG_PATH}/LiteLLM/config.yaml:/app/config.yaml
+      - ${REPO_CONFIG_PATH}/LiteLLM/llama-swap-models.yaml:/app/llama-swap-models.yaml
+    command:
+      - "--config"
+      - "/app/config.yaml"
+      - "--port"
+      - "4000"
+    networks: [edge, inference, data]
+
+  # --- LiteLLM database (PostgreSQL) ---
+  litellm-db:
+    image: postgres:15-alpine
+    container_name: litellm-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-litellm}
+      POSTGRES_USER: ${POSTGRES_USER:-litellm_admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - litellm_db_data:/var/lib/postgresql/data
+    networks: [data]
+
+  # ==========================================================================
+  # Build targets — not run directly (profiles: [tools] keeps them out of
+  # `up -d`). llama-swap spawns ephemeral containers from these images on
+  # demand; each entry exists so `docker compose build <name>` produces it.
+  # ==========================================================================
+
+  vllm:
+    image: vllm-spark:local
+    build:
+      context: ./vllm
+      dockerfile: vllm.Dockerfile
+    profiles: ["tools"]
+
+  comfyui:
+    image: comfyui:local
+    build:
+      context: ./comfyui
+      dockerfile: comfyui.Dockerfile
+    profiles: ["tools"]
+
+  sd-cpp:
+    image: sd-cpp:local
+    build:
+      context: ./sd-cpp
+      dockerfile: sd-cpp.Dockerfile
+    profiles: ["tools"]
+
+networks:
+  edge:
+  ui:
+  inference:
+  data:
+    internal: true
+  engines:
+
+volumes:
+  litellm_db_data:
+  caddy_data:
+  caddy_config:

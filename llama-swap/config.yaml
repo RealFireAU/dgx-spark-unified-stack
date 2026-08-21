@@ -1,0 +1,31 @@
+# llama-swap config.yaml — global settings only. Models live under models/
+# (one file each, loaded via -config-dir + -watch-config — see docker-compose.yml).
+# Web UI: /ui on whatever hostname you route to this service.
+
+healthCheckTimeout: 1200
+logLevel: "info"
+
+apiKeys:
+  - "${env.LLAMA_SWAP_API_KEY}"
+
+macros:
+  host: "0.0.0.0"
+
+  # Shared docker-run prefix for every GGUF/safetensors model's cmd:
+  llamacpp_base: >
+    docker run --rm --name llamacpp-${MODEL_ID}-${PORT}
+    --gpus all --ipc host --network container:llama-swap
+    --ulimit memlock=-1 --ulimit stack=67108864
+    --security-opt seccomp=unconfined
+    -e GGML_CUDA_ENABLE_UNIFIED_MEMORY=1
+    -v ${env.LLM_ROOT_PATH}/gguf:/models/gguf
+    ghcr.io/ggml-org/llama.cpp:server-cuda13
+
+  vllm_base: >
+    docker run --rm --name vllm-${MODEL_ID}-${PORT}
+    --gpus all --ipc host --network container:llama-swap
+    -v ${env.LLM_ROOT_PATH}/safetensors:/models
+    -v ${env.LLM_ROOT_PATH}/.vllm-cache:/root/.cache
+    vllm-spark:local
+    --enforce-eager
+    --load-format fastsafetensors

@@ -1,0 +1,28 @@
+models:
+  My-Safetensors-Model:
+    name: "My Safetensors Model (vLLM)"
+    description: "Example vLLM/safetensors registration — replace with your own model"
+    metadata:
+      input_cost_per_token: 0.0000002
+      output_cost_per_token: 0.0000007
+      cost_currency: "AUD"
+      cost_basis: "generated via scripts/estimate_model_cost.py from real measured throughput"
+    capabilities:
+      in: [text]
+      out: [text]
+      tools: true
+      context: 131072
+    ttl: 300
+    checkEndpoint: "/health"
+    cmd: |
+      ${vllm_base}
+      --model /models/some-org/some-repo
+      --served-model-name My-Safetensors-Model
+      --trust-remote-code
+      --host ${host}
+      --port ${PORT}
+      --gpu-memory-utilization 0.5
+      --max-model-len 131072
+      --enable-auto-tool-choice
+      --tool-call-parser qwen3_coder
+    cmdStop: "docker stop vllm-${MODEL_ID}-${PORT}"

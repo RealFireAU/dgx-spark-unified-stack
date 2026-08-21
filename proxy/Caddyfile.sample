@@ -1,0 +1,38 @@
+# Caddyfile — internal reverse proxy in front of the stack.
+# Real certs via Cloudflare DNS-01 (CF_API_TOKEN in .env, caddy.Dockerfile
+# provides the DNS plugin). Per-hostname routing (not path-prefix) since
+# LiteLLM/llama-swap are SPAs.
+#
+# Copy this to Caddyfile and replace the example.com hostnames with your own.
+{
+	acme_dns cloudflare {env.CF_API_TOKEN}
+}
+
+litellm.example.com {
+	reverse_proxy litellm:4000
+}
+
+# Admin UI only — inference is served via litellm.example.com.
+llama-swap.example.com {
+	@swap_inference {
+		path /v1/* /sdapi/*
+		not path /v1/models
+		not header X-Session-Id lspg-*
+	}
+	respond @swap_inference "inference is served via litellm.example.com, not here" 403
+
+	reverse_proxy llama-swap:8080
+}
+
+# -> llama-swap's /comfyui/* route (comfyui_auto, spawned on demand).
+comfyui.example.com {
+	rewrite * /comfyui{uri}
+	reverse_proxy llama-swap:8080 {
+		header_up Authorization "Bearer {env.LLAMA_SWAP_API_KEY}"
+	}
+}
+
+# Bare IP / no matching Host header -> LiteLLM.
+:80 {
+	reverse_proxy litellm:4000
+}

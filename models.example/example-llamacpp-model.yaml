@@ -1,0 +1,24 @@
+models:
+  My-Model-Q4_K_M:
+    name: "My Model (GGUF, Q4_K_M)"
+    description: "Example llama.cpp/GGUF registration — replace with your own model"
+    capabilities:
+      in: [text]
+      out: [text]
+      tools: true
+      context: 32768
+    ttl: 300
+    checkEndpoint: "/health"
+    cmd: |
+      ${llamacpp_base}
+      -m /models/gguf/some-org/some-repo/My-Model-Q4_K_M.gguf
+      --alias My-Model-Q4_K_M
+      --jinja
+      --port ${PORT}
+      --host ${host}
+      --ctx-size 0
+      --fit-ctx 8192
+      --n-gpu-layers 99
+      --parallel 1
+      --no-mmap
+    cmdStop: "docker stop llamacpp-${MODEL_ID}-${PORT}"
