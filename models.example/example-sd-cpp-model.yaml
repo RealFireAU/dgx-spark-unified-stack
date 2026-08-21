@@ -1,0 +1,18 @@
+models:
+  My-Diffusion-Model:
+    name: "My Diffusion Model"
+    description: "Example stable-diffusion.cpp registration — natively OpenAI-compatible (/v1/images/generations) and Automatic1111-compatible (/sdapi/v1/...), no shim needed. Replace with your own checkpoint."
+    capabilities:
+      in: [text]
+      out: [image]
+      tools: false
+    ttl: 300
+    checkEndpoint: "/"
+    cmd: |
+      docker run --rm --name sdcpp-my-diffusion-model-${PORT}
+      --gpus all --ipc host --network container:llama-swap
+      -v ${env.LLM_ROOT_PATH}/diffusion:/models
+      sd-cpp:local
+      -m /models/checkpoints/some-checkpoint/some-checkpoint.safetensors
+      --listen-ip ${host} --listen-port ${PORT}
+    cmdStop: "docker stop sdcpp-my-diffusion-model-${PORT}"

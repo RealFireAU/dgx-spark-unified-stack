@@ -11,6 +11,9 @@ shows the schema with worked examples — copy one into your own
 - `example-comfyui-model.yaml` — the special `comfyui_auto` entry (no
   `capabilities:` block, `unlisted: true`) that gives llama-swap's native
   ComfyUI integration a container to spawn
+- `example-sd-cpp-model.yaml` — an image-generation model via
+  stable-diffusion.cpp (`capabilities.out: [image]`), natively OpenAI- and
+  Automatic1111-compatible, no shim needed
 
 llama-swap runs with `-config llama-swap/config.yaml -config-dir models/
 -watch-config`, which merges every `*.yaml` under `models/` into the config
